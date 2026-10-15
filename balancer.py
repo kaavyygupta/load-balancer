@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import httpx
 import uvicorn
 
@@ -14,10 +14,15 @@ async def forward():
     turn += 1
     if turn == len(backends):
         turn = 0
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(active)
-        return response.json()
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(active, timeout=5.0)
+            return response.json()
+    except(httpx.ConnectError, httpx.TimeoutException):
+        raise HTTPException(
+            status_code=503,
+            detail="No backend found"
+        )
 
 if __name__ == "__main__":
     uvicorn.run(app, port=8000)
