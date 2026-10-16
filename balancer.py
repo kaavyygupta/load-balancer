@@ -14,6 +14,15 @@ status = {
     "http://127.0.0.1:8003": True
 }
 
+total_requests = 0
+total_failures = 0
+
+requests_served = {
+    "http://127.0.0.1:8001": 0,
+    "http://127.0.0.1:8002": 0,
+    "http://127.0.0.1:8003": 0
+}
+
 async def check_health():
     async with httpx.AsyncClient() as client:
         while True:
@@ -35,7 +44,9 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 async def forward():
-    global turn
+    global turn, total_requests, total_failures
+    
+    total_requests += 1
 
     for _ in range(len(backends)):
         active = backends[turn]
@@ -47,14 +58,27 @@ async def forward():
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(active, timeout=5.0)
+                requests_served[active] += 1
                 return response.json()
         except(httpx.ConnectError, httpx.TimeoutException):
             status[active] = False
-            
+
+    total_failures += 1   
+
     raise HTTPException(
         status_code=503,
         detail="No backend found"
     )
+
+@app.get("/metrics")
+async def metrics():
+    return {
+        "Total_requests": total_requests,
+        "Total_failures": total_failures,
+        "Requests_per_backend": requests_served,
+        "Status": status
+    }
+
 
 if __name__ == "__main__":
     uvicorn.run(app, port=8000)
