@@ -7,6 +7,12 @@ app = FastAPI()
 backends = ["http://127.0.0.1:8001", "http://127.0.0.1:8002", "http://127.0.0.1:8003"]
 turn = 0
 
+status = {
+    "http://127.0.0.1:8001": True,
+    "http://127.0.0.1:8002": True,
+    "http://127.0.0.1:8003": True
+}
+
 @app.get("/")
 async def forward():
     global turn
@@ -16,12 +22,14 @@ async def forward():
         turn += 1
         if turn == len(backends):
             turn = 0
+        if status[active] == False:
+            continue
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(active, timeout=5.0)
                 return response.json()
         except(httpx.ConnectError, httpx.TimeoutException):
-            pass
+            status[active] = False
             
     raise HTTPException(
         status_code=503,
